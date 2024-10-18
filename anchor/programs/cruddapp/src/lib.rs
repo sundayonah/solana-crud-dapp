@@ -2,69 +2,100 @@
 
 use anchor_lang::prelude::*;
 
-declare_id!("AsjZ3kWAUSQRNt2pZVeJkywhZ6gpLpHZmJjduPmKZDZZ");
+declare_id!("BoH1Q7uc59FTJ9s37oX5q7nZ4nrsvXpQ4w3aptv7mJ5P");
 
 #[program]
-pub mod cruddapp {
+mod journal {
     use super::*;
 
-  pub fn close(_ctx: Context<CloseCruddapp>) -> Result<()> {
-    Ok(())
-  }
+    pub fn create_journal_entry(
+        ctx: Context<CreateEntry>,
+        title: String,
+        message: String,
+    ) -> Result<()> {
+        msg!("Journal Entry Created");
+        msg!("Title: {}", title);
+        msg!("Message: {}", message);
 
-  pub fn decrement(ctx: Context<Update>) -> Result<()> {
-    ctx.accounts.cruddapp.count = ctx.accounts.cruddapp.count.checked_sub(1).unwrap();
-    Ok(())
-  }
+        let journal_entry = &mut ctx.accounts.journal_entry;
+        journal_entry.owner = ctx.accounts.owner.key();
+        journal_entry.title = title;
+        journal_entry.message = message;
+        Ok(())
+    }
 
-  pub fn increment(ctx: Context<Update>) -> Result<()> {
-    ctx.accounts.cruddapp.count = ctx.accounts.cruddapp.count.checked_add(1).unwrap();
-    Ok(())
-  }
+    pub fn update_journal_entry(
+        ctx: Context<UpdateEntry>,
+        title: String,
+        message: String,
+    ) -> Result<()> {
+        msg!("Journal Entry Updated");
+        msg!("Title: {}", title);
+        msg!("Message: {}", message);
 
-  pub fn initialize(_ctx: Context<InitializeCruddapp>) -> Result<()> {
-    Ok(())
-  }
+        let journal_entry = &mut ctx.accounts.journal_entry;
+        journal_entry.message = message;
 
-  pub fn set(ctx: Context<Update>, value: u8) -> Result<()> {
-    ctx.accounts.cruddapp.count = value.clone();
-    Ok(())
-  }
-}
+        Ok(())
+    }
 
-#[derive(Accounts)]
-pub struct InitializeCruddapp<'info> {
-  #[account(mut)]
-  pub payer: Signer<'info>,
-
-  #[account(
-  init,
-  space = 8 + Cruddapp::INIT_SPACE,
-  payer = payer
-  )]
-  pub cruddapp: Account<'info, Cruddapp>,
-  pub system_program: Program<'info, System>,
-}
-#[derive(Accounts)]
-pub struct CloseCruddapp<'info> {
-  #[account(mut)]
-  pub payer: Signer<'info>,
-
-  #[account(
-  mut,
-  close = payer, // close account and return lamports to payer
-  )]
-  pub cruddapp: Account<'info, Cruddapp>,
-}
-
-#[derive(Accounts)]
-pub struct Update<'info> {
-  #[account(mut)]
-  pub cruddapp: Account<'info, Cruddapp>,
+    pub fn delete_journal_entry(_ctx: Context<DeleteEntry>, title: String) -> Result<()> {
+        msg!("Journal entry titled {} deleted", title);
+        Ok(())
+    }
 }
 
 #[account]
-#[derive(InitSpace)]
-pub struct Cruddapp {
-  count: u8,
+pub struct JournalEntryState {
+    pub owner: Pubkey,
+    pub title: String,
+    pub message: String,
+}
+
+#[derive(Accounts)]
+#[instruction(title: String, message: String)]
+pub struct CreateEntry<'info> {
+    #[account(
+        init,
+        seeds = [title.as_bytes(), owner.key().as_ref()], 
+        bump, 
+        payer = owner, 
+        space = 8 + 32 + 4 + title.len() + 4 + message.len()
+    )]
+    pub journal_entry: Account<'info, JournalEntryState>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(title: String, message: String)]
+pub struct UpdateEntry<'info> {
+    #[account(
+        mut,
+        seeds = [title.as_bytes(), owner.key().as_ref()], 
+        bump, 
+        realloc = 8 + 32 + 4 + title.len() + 4 + message.len(),
+        realloc::payer = owner, 
+        realloc::zero = true, 
+    )]
+    pub journal_entry: Account<'info, JournalEntryState>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(title: String)]
+pub struct DeleteEntry<'info> {
+    #[account( 
+        mut, 
+        seeds = [title.as_bytes(), owner.key().as_ref()], 
+        bump, 
+        close= owner,
+    )]
+    pub journal_entry: Account<'info, JournalEntryState>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
